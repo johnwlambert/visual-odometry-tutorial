@@ -258,23 +258,24 @@ def main():
 		for k,ts in enumerate(lidar_timestamps[::50]):
 			city_SE3_egov_t = get_city_SE3_egovehicle_at_sensor_t(ts, dataset_dir, log_id) 
 			t = city_SE3_egov_t.translation
-			plt.scatter(t[0], t[1], 10, marker='.', color=colors_arr[k])
+			plt.scatter(t[0], t[1], 20, marker='.', color=colors_arr[k])
 		
 
 		city_SE3_egot1 = get_city_SE3_egovehicle_at_sensor_t(ts1, dataset_dir, log_id) 
 		city_SE3_egot2 = get_city_SE3_egovehicle_at_sensor_t(ts2, dataset_dir, log_id) 
 		
-		USE_CAMERA_FRAME = False
+		pdb.set_trace()
+		USE_CAMERA_FRAME = True
 		if USE_CAMERA_FRAME:
 			camera_T_egovehicle = calib_dict['ring_front_center'].extrinsic
 			camera_T_egovehicle = SE3(rotation=camera_T_egovehicle[:3,:3], translation=camera_T_egovehicle[:3,3])
 			egovehicle_T_camera = camera_T_egovehicle.inverse()
 
-			city_SE3_camt1 = city_SE3_egot1.right_multiply_with_se3(egovehicle_T_camera)
-			city_SE3_camt2 = city_SE3_egot2.right_multiply_with_se3(egovehicle_T_camera)
+			city_SE3_camt1 = city_SE3_egot1.compose(egovehicle_T_camera)
+			city_SE3_camt2 = city_SE3_egot2.compose(egovehicle_T_camera)
 
 			camt1_SE3_city = city_SE3_camt1.inverse()
-			camt1_SE3_camt2 = camt1_SE3_city.right_multiply_with_se3(city_SE3_camt2)
+			camt1_SE3_camt2 = camt1_SE3_city.compose(city_SE3_camt2)
 
 			# rotates i1's frame to i2's frame
 			# 1R2 bring points in 2's frame into 1's frame
@@ -288,24 +289,37 @@ def main():
 			t2 = city_SE3_egot2.translation
 			plt.scatter(t1[0], t1[1], 10, marker='o', color='m')
 			plt.scatter(t2[0], t2[1], 10, marker='o', color='c')
+
+			posx_1 = city_SE3_egot1.transform_point_cloud(np.array([[3,0,0]])).squeeze()
+			posy_1 = city_SE3_egot1.transform_point_cloud(np.array([[0,3,0]])).squeeze()
+
+			posx_2 = city_SE3_egot2.transform_point_cloud(np.array([[3,0,0]])).squeeze()
+			posy_2 = city_SE3_egot2.transform_point_cloud(np.array([[0,3,0]])).squeeze()
+
+			plt.plot([t1[0], posx_1[0]], [t1[1], posx_1[1]], 'b')
+			plt.plot([t1[0], posy_1[0]], [t1[1], posy_1[1]], 'k')
+
+			plt.plot([t2[0], posx_2[0]], [t2[1], posx_2[1]], 'b')
+			plt.plot([t2[0], posy_2[0]], [t2[1], posy_2[1]], 'k')
+
 			plt.axis('equal')
 			plt.title('Egovehicle trajectory')
 			plt.xlabel('x city coordinate')
 			plt.ylabel('y city coordinate')
 			plt.show()
 
-			egov_t1_SE3_city = city_SE3_egot1.inverse()
-			egov_t1_SE3_egov_t2 = egov_t1_SE3_city.right_multiply_with_se3(city_SE3_egov_t2)
+			egot1_SE3_city = city_SE3_egot1.inverse()
+			egot1_SE3_egot2 = egot1_SE3_city.right_multiply_with_se3(city_SE3_egot2)
 
 			# rotates i1's frame to i2's frame
 			# 1R2 bring points in 2's frame into 1's frame
 			# 1R2 is the relative rotation from 1's frame to 2's frame
-			i2_R_i1 = egov_t1_SE3_egov_t2.rotation
-			i2_t_i1 = egov_t1_SE3_egov_t2.translation
+			i2_R_i1 = egot1_SE3_egot2.rotation
+			i2_t_i1 = egot1_SE3_egot2.translation
 
 		r = Rotation.from_matrix(i2_R_i1)
 		print('Relative rotation from ground truth: ', r.as_euler('zyx', degrees=True))
-
+		pdb.set_trace()
 		# use correct ground truth relationship to generate gt_E
 		# and then generate correspondences using
 		i2_E_i1 = compute_essential_matrix(i2_R_i1, i2_t_i1)
