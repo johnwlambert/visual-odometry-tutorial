@@ -140,7 +140,6 @@ def main():
 
 	img1_exif_data = get_exif(img1_fpath)
 	img2_exif_data = get_exif(img2_fpath)
-	#pdb.set_trace()
 
 	img1 = imageio.imread(img1_fpath).astype(np.float32) / 255
 	img2 = imageio.imread(img2_fpath).astype(np.float32) / 255
@@ -176,7 +175,6 @@ def main():
 
 	if ESTIMATE_FROM_SCRATCH:
 		E, F, corr_data = ORB_estimate_pose(img1_fpath, img2_fpath, K1=K, K2=K)
-		pdb.set_trace()
 		corr_img = show_correspondence_lines(img1, img2, corr_data.X1, corr_data.Y1, corr_data.X2, corr_data.Y2)
 		plt.imshow(corr_img)
 		plt.show()
@@ -214,6 +212,7 @@ def main():
 
 	USE_HAND_ANNOTATION = True
 	if USE_HAND_ANNOTATION:
+
 		E, mask_new = cv2.findEssentialMat(img1_kpts, img2_kpts, K, method=cv2.RANSAC, threshold=0.1)
 		_num_inlier, R, t, _mask_new2 = cv2.recoverPose(E, img1_kpts, img2_kpts, mask=mask_new)
 
@@ -221,6 +220,7 @@ def main():
 		# check on name?
 		i2_SE3_i1 = SE3(R, t.squeeze() ).inverse()
 		R = i2_SE3_i1.rotation
+		t = i2_SE3_i1.translation
 
 		r = Rotation.from_matrix(R)
 		print(r.as_euler('zyx', degrees=True))
@@ -264,7 +264,6 @@ def main():
 		city_SE3_egot1 = get_city_SE3_egovehicle_at_sensor_t(ts1, dataset_dir, log_id) 
 		city_SE3_egot2 = get_city_SE3_egovehicle_at_sensor_t(ts2, dataset_dir, log_id) 
 		
-		pdb.set_trace()
 		USE_CAMERA_FRAME = True
 		if USE_CAMERA_FRAME:
 			camera_T_egovehicle = calib_dict['ring_front_center'].extrinsic
@@ -282,6 +281,9 @@ def main():
 			# 1R2 is the relative rotation from 1's frame to 2's frame
 			i2_R_i1 = camt1_SE3_camt2.rotation
 			i2_t_i1 = camt1_SE3_camt2.translation
+
+			print('Recover t=', i2_t_i1, ' up to scale ', i2_t_i1 / np.linalg.norm(i2_t_i1))
+			pdb.set_trace()
 
 		else:
 			pdb.set_trace()
@@ -336,8 +338,6 @@ def main():
 		for (pt1, pt2) in zip(pts_left, pts_right):
 			epi_error = pt2.dot(i2_F_i1).dot(pt1)
 			print('Error: ', epi_error)
-
-		pdb.set_trace()
 
 
 		draw_epilines(pts_left, pts_right, img1, img2, i2_F_i1)
@@ -520,7 +520,7 @@ def egomotion_unit_test():
 	egot1_SE3_egot2 = egot1_SE3_city.right_multiply_with_se3(city_SE3_egot2)
 
 	assert np.allclose(egot1_SE3_egot2.translation, np.array([10,0,0]))
-	pdb.set_trace()
+
 
 
 colors = np.random.rand(50,3)
@@ -598,7 +598,6 @@ def ORB_estimate_pose(img1_fpath, img2_fpath, K1, K2, ratio = 0.9, fmat: bool = 
 			ratios.append(m.distance / n.distance)
 
 	print("Number of valid matches:", len(good_matches))
-	pdb.set_trace()
 
 	pts1 = np.array([pts1])
 	pts2 = np.array([pts2])
@@ -616,7 +615,6 @@ def ORB_estimate_pose(img1_fpath, img2_fpath, K1, K2, ratio = 0.9, fmat: bool = 
 
 		F, ransac_inliers = cv2.findFundamentalMat(pts1, pts2, ransacReprojThreshold=threshold, confidence=0.99999)
 		E = None
-		pdb.set_trace()
 	else:
 		# === CASE ESSENTIAL MATRIX =========================================
 
