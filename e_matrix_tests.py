@@ -334,7 +334,7 @@ def egomotion_unit_test():
 colors = np.random.rand(50,3)
 num_colors = colors.shape[0]
 
-def drawlines(img1,img2,lines,pts1,pts2):
+def drawlines(img1: np.ndarray, img2: np.ndarray, lines, pts1, pts2):
 	''' img1 - image on which we draw the epilines for the points in img2
 	lines - corresponding epilines '''
 	r,c, _ = img1.shape
@@ -351,7 +351,7 @@ def drawlines(img1,img2,lines,pts1,pts2):
 
 
 
-def draw_epilines(pts1, pts2, img1, img2, F):
+def draw_epilines(pts1: np.ndarray, pts2: np.ndarray, img1: np.ndarray, img2: np.ndarray, F: np.ndarray) -> np.ndarray:
 	# Find epilines corresponding to points in right image (second image) and
 	# drawing its lines on left image
 	lines1 = cv2.computeCorrespondEpilines(pts2.reshape(-1,1,2), 2,F)
@@ -370,7 +370,6 @@ def draw_epilines(pts1, pts2, img1, img2, F):
 
 def ORB_estimate_pose(img1_fpath, img2_fpath, K1, K2, ratio = 0.9, fmat: bool = False):
 	""" """
-	
 	detector = cv2.ORB_create()
 
 	img1 = cv2.imread(img1_fpath)
@@ -527,65 +526,62 @@ def plot_argoverse_trajectory(ts1: int, ts2: int, dataset_dir: str, log_id: str)
 
 def plot_argoverse_epilines_from_ground_truth_poses(ts1: int, ts2: int, img1, img2, K):
 	""" """
-
 	city_SE3_egot1 = get_city_SE3_egovehicle_at_sensor_t(ts1, dataset_dir, log_id) 
 	city_SE3_egot2 = get_city_SE3_egovehicle_at_sensor_t(ts2, dataset_dir, log_id) 
-
 
 	camera_T_egovehicle = calib_dict['ring_front_center'].extrinsic
 	camera_T_egovehicle = SE3(rotation=camera_T_egovehicle[:3,:3], translation=camera_T_egovehicle[:3,3])
 	egovehicle_T_camera = camera_T_egovehicle.inverse()
 
-	city_SE3_camt1 = city_SE3_egot1.compose(egovehicle_T_camera)
-	city_SE3_camt2 = city_SE3_egot2.compose(egovehicle_T_camera)
+	city_SE3_cam1 = city_SE3_egot1.compose(egovehicle_T_camera)
+	city_SE3_cam2 = city_SE3_egot2.compose(egovehicle_T_camera)
 
-	camt1_SE3_city = city_SE3_camt1.inverse()
-	camt1_SE3_camt2 = camt1_SE3_city.compose(city_SE3_camt2)
+	cam1_SE3_city = city_SE3_cam1.inverse()
+	cam1_SE3_cam2 = cam1_SE3_city.compose(city_SE3_cam2)
 
 	# rotates i1's frame to i2's frame
 	# 1R2 bring points in 2's frame into 1's frame
 	# 1R2 is the relative rotation from 1's frame to 2's frame
-	i1_R_i2 = camt1_SE3_camt2.rotation
-	i1_t_i2 = camt1_SE3_camt2.translation
+	cam1_R_cam2 = cam1_SE3_cam2.rotation
+	cam1_t_cam2 = cam1_SE3_cam2.translation
 
-	print('Recover t=', i1_t_i2, ' up to scale ', i1_t_i2 / np.linalg.norm(i1_t_i2))
-	pdb.set_trace()
-	r = Rotation.from_matrix(i1_R_i2)
-	print('USE_CAMERA_FRAME=', USE_CAMERA_FRAME, ' i1_R_i2 from ground truth: ', r.as_euler('zyx', degrees=True))
-	pdb.set_trace()
+	r = Rotation.from_matrix(cam1_R_cam2)
+	print('cam1_R_cam2 =', r.as_euler('zyx', degrees=True))
+	print('Recover t=', cam1_t_cam2, ' up to scale ', cam1_t_cam2 / np.linalg.norm(cam1_t_cam2))
 
-	egot2_SE3_egot1 = egot1_SE3_egot2.inverse()
-	i2_R_i1 = egot2_SE3_egot1.rotation
-	i2_t_i1 = egot2_SE3_egot1.rotation
+	cam2_SE3_cam1 = cam1_SE3_cam2.inverse()
+	cam2_R_cam1 = cam2_SE3_cam1.rotation
+	cam2_t_cam1 = cam2_SE3_cam1.translation
 
 	# use correct ground truth relationship to generate gt_E
 	# and then generate correspondences using
-	i2_E_i1 = compute_essential_matrix(i2_R_i1, i2_t_i1)
-	i2_F_i1 = get_fmat_from_emat(i2_E_i1, K1=K, K2=K)
+	cam2_E_cam1 = compute_essential_matrix(cam2_R_cam1, cam2_t_cam1)
+	cam2_F_cam1 = get_fmat_from_emat(cam2_E_cam1, K1=K, K2=K)
 
 	img_h, img_w, _ = img1.shape
 
+	pkl_fpath = f'/Users/johnlambert/Downloads/visual-odometry-tutorial/labeled_correspondences/argoverse_1_E_0.pkl'
+	corr_data = load_pkl_correspondences(pkl_fpath)
+
 	pts_left = np.hstack([corr_data.X1.reshape(-1,1), corr_data.Y1.reshape(-1,1) ]).astype(np.int32)
 	pts_right = np.hstack([corr_data.X2.reshape(-1,1), corr_data.Y2.reshape(-1,1)]).astype(np.int32)
+
+	pdb.set_trace()
+	draw_epilines(pts_left, pts_right, img1, img2, cam2_F_cam1)
+	plt.show()
+	draw_epipolar_lines(cam2_F_cam1, img1, img2, pts_left, pts_right)
 
 	pts_left = cartesian_to_homogeneous(pts_left)
 	pts_right = cartesian_to_homogeneous(pts_right)
 
 	for (pt1, pt2) in zip(pts_left, pts_right):
-		epi_error = pt2.dot(i2_F_i1).dot(pt1)
+		epi_error = pt2.dot(cam2_F_cam1).dot(pt1)
 		print('Error: ', epi_error)
-
-	draw_epilines(pts_left, pts_right, img1, img2, i2_F_i1)
-	plt.show()
-
-	draw_epipolar_lines(i2_F_i1, img1, img2, pts_left, pts_right)
-
-
 
 
 def plot_argoverse_epilines_from_annotated_correspondences(img1: np.ndarray, img2: np.ndarray, K: np.ndarray):
 	""" """
-	pkl_fpath = f'/Users/johnlambert/Downloads/visual-odometry-tutorial/labeled_correspondences/{dataset_name}_{j}_E_{i}.pkl'
+	pkl_fpath = f'/Users/johnlambert/Downloads/visual-odometry-tutorial/labeled_correspondences/argoverse_1_E_0.pkl'
 	corr_data = load_pkl_correspondences(pkl_fpath)
 
 	corr_img = show_correspondence_lines(img1, img2, corr_data.X1, corr_data.Y1, corr_data.X2, corr_data.Y2)
@@ -603,7 +599,7 @@ def plot_argoverse_epilines_from_annotated_correspondences(img1: np.ndarray, img
 
 	r = Rotation.from_matrix(cam2_R_cam1)
 	print('cam2_R_cam1 recovered from correspondences', r.as_euler('zyx', degrees=True))
-	print('cam2_t_cam1: ', np.round(cam2_t_cam1, 2))
+	print('cam2_t_cam1: ', np.round(cam2_t_cam1.squeeze(), 2))
 
 	cam2_SE3_cam1 = SE3(cam2_R_cam1, cam2_t_cam1.squeeze() )
 	cam1_SE3_cam2 = cam2_SE3_cam1.inverse()
@@ -614,6 +610,7 @@ def plot_argoverse_epilines_from_annotated_correspondences(img1: np.ndarray, img
 	print('cam1_R_cam2: ', r.as_euler('zyx', degrees=True)) ## prints "[-0.32  33.11 -0.45]"
 	print('cam1_t_cam2: ', np.round(cam1_t_cam2,2)) ## [0.21 0.   0.98]
 
+	pdb.set_trace()
 	draw_epilines(img1_kpts, img2_kpts, img1, img2, cam2_F_cam1)
 	plt.show()
 
@@ -691,10 +688,10 @@ if __name__ == '__main__':
 		# ts1 = Path(img1_fpath).stem.split('_')[-1]
 		# ts2 = Path(img2_fpath).stem.split('_')[-1]
 
-	pdb.set_trace()
-	plot_argoverse_trajectory(ts1, ts2, dataset_dir, log_id)
-	# plot_argoverse_epilines_from_ground_truth_poses(ts1, ts2, img1, img2, K)
-	# plot_argoverse_epilines_from_annotated_correspondences(img1, img2, K)
+
+	#plot_argoverse_trajectory(ts1, ts2, dataset_dir, log_id)
+	plot_argoverse_epilines_from_ground_truth_poses(ts1, ts2, img1, img2, K)
+	#plot_argoverse_epilines_from_annotated_correspondences(img1, img2, K)
 
 	# plot_backyard_epilines()
 
