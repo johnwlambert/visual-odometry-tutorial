@@ -52,7 +52,6 @@ def load_pkl_correspondences(pkl_fpath: str):
 	return ImgKptCorrespondences(X1,Y1,X2,Y2)
 
 
-
 def get_exif(img_fpath: str):
 	""" """
 	original_image = PILImage.open(img_fpath)
@@ -72,7 +71,14 @@ def get_exif(img_fpath: str):
 
 
 def get_intrinsics_from_exif(exif_data, value_array):
-	""" """
+	"""
+	'Make', 'Model', 'LensModel'
+
+	Example camera:
+		Alpha a6000
+		APS-C type (23.5 x 15.6 mm) 
+		Max. image resolution:	6000 x 4000
+	"""
 	if exif_data is None or len(exif_data) == 0:
 		return None
 
@@ -90,79 +96,18 @@ def get_intrinsics_from_exif(exif_data, value_array):
 	center_x = img_w_px/2
 	center_y = img_h_px/2
 
-	# Alpha a6000
-	# APS-C type (23.5 x 15.6 mm) 
-	# Max. image resolution:	6000 x 4000
-
 	K = np.array(
 		[
 			[focal_length_px, 0, center_x],
 			[0,  focal_length_px, center_y],
 			[0, 0, 1]
 		])
-
 	return K
 
 
-def main():
-
-	# img_dir = '/Users/johnlambert/Downloads/homography_scenes'
-	# planar_img_names = [
-	# 	'plane_img1.jpg',
-	# 	'plane_img2.jpg',
-	# 	'plane_img3.jpg'
-	# ]
-	#for img_name in img_names:
-
-	# img_names = [
-	# 	'outdoor_img0.JPG',
-	# 	'outdoor_img1.JPG',
-	# 	'outdoor_img2.JPG'
-	# ]
-	# img_dir = '/Users/johnlambert/Downloads/GTSFM/outdoor_imgs'
-
-	img_names = [
-		'ring_front_center_315975640448534784.jpg',
-		'ring_front_center_315975643412234000.jpg'
-	]
-	img_dir = '/Users/johnlambert/Downloads/visual-odometry-tutorial/train1/273c1883-673a-36bf-b124-88311b1a80be/ring_front_center'
-	dataset_name = 'argoverse'
+def estimate_orb_correspondences():
 
 
-	# i = 1
-	# j = 2
-
-	i = 0
-	j = 1
-
-	img1_fpath = f'{img_dir}/{img_names[i]}'
-	img2_fpath = f'{img_dir}/{img_names[j]}'
-
-	img1_exif_data = get_exif(img1_fpath)
-	img2_exif_data = get_exif(img2_fpath)
-
-	img1 = imageio.imread(img1_fpath).astype(np.float32) / 255
-	img2 = imageio.imread(img2_fpath).astype(np.float32) / 255
-	# plt.imshow(img)
-	# plt.show()
-
-	pkl_fpath = f'/Users/johnlambert/Downloads/visual-odometry-tutorial/labeled_correspondences/{dataset_name}_{j}_E_{i}.pkl'
-	corr_data = load_pkl_correspondences(pkl_fpath)
-
-	corr_img = show_correspondence_lines(img1, img2, corr_data.X1, corr_data.Y1, corr_data.X2, corr_data.Y2)
-	plt.imshow(corr_img)
-	plt.show()
-
-	img1_kpts = np.hstack([ corr_data.X1.reshape(-1,1), corr_data.Y1.reshape(-1,1) ]).astype(np.int32)
-	img2_kpts = np.hstack([ corr_data.X2.reshape(-1,1), corr_data.Y2.reshape(-1,1) ]).astype(np.int32)
-
-	if dataset_name == 'argoverse':
-		calib_fpath = '/Users/johnlambert/Downloads/visual-odometry-tutorial/train1/273c1883-673a-36bf-b124-88311b1a80be/vehicle_calibration_info.json'
-		calib_dict = load_calib(calib_fpath)
-		K = calib_dict['ring_front_center'].K[:3,:3]
-	else:
-		img1_exif_data['Model'] = "Sony Alpha a6000" # "Alpha a6000"
-		K = get_intrinsics_from_exif(img1_exif_data, img1)
 
 	# (Pdb) p img1_exif_data[ 'ExifImageWidth']
 	# 6000
@@ -205,157 +150,20 @@ def main():
 
 
 
-	# 'Make', 'Model'
-	# 'LensModel'
 
 	#ransac_model, ransac_inliers = cv2.findFundamentalMat(pts1, pts2, ransacReprojThreshold=opt.threshold, confidence=0.999)
 
-	USE_HAND_ANNOTATION = True
-	if USE_HAND_ANNOTATION:
+	# pts1_virt, pts2_virt = compute_virtual_points(img_h, img_w, i2_F_i1)
 
-		E, mask_new = cv2.findEssentialMat(img1_kpts, img2_kpts, K, method=cv2.RANSAC, threshold=0.1)
-		_num_inlier, R, t, _mask_new2 = cv2.recoverPose(E, img1_kpts, img2_kpts, mask=mask_new)
-
-		pdb.set_trace()
-		# check on name?
-		i2_SE3_i1 = SE3(R, t.squeeze() ).inverse()
-		R = i2_SE3_i1.rotation
-		t = i2_SE3_i1.translation
-
-		r = Rotation.from_matrix(R)
-		print(r.as_euler('zyx', degrees=True))
-
-		pdb.set_trace()
-		i2_F_i1 = get_fmat_from_emat(E, K1=K, K2=K)
-
-		draw_epilines(img1_kpts, img2_kpts, img1, img2, i2_F_i1)
-		plt.show()
-
-		draw_epipolar_lines(i2_F_i1, img1, img2, img1_kpts, img2_kpts)
-		plt.show()
-
-
-
-
-	if dataset_name == 'argoverse':
-		# get the ground truth pose
-		# timestamps
-		ts1 = Path(img1_fpath).stem.split('_')[-1]
-		ts2 = Path(img2_fpath).stem.split('_')[-1]
-		log_id = '273c1883-673a-36bf-b124-88311b1a80be'
-		dataset_dir = '/Users/johnlambert/Downloads/visual-odometry-tutorial/train1'
-
-		# plot the vehicle movement
-
-		sensor_folder_wildcard = f"{dataset_dir}/{log_id}/poses/city_SE3_egovehicle*.json"
-		lidar_timestamps = get_timestamps_from_sensor_folder(sensor_folder_wildcard)
-
-		colors_arr = np.array(
-			[ [color_obj.rgb] for color_obj in Color("red").range_to(Color("green"), len(lidar_timestamps) // 49 ) ]
-		).squeeze()
-
-		plt.close('all')
-		for k,ts in enumerate(lidar_timestamps[::50]):
-			city_SE3_egov_t = get_city_SE3_egovehicle_at_sensor_t(ts, dataset_dir, log_id) 
-			t = city_SE3_egov_t.translation
-			plt.scatter(t[0], t[1], 20, marker='.', color=colors_arr[k])
-		
-
-		city_SE3_egot1 = get_city_SE3_egovehicle_at_sensor_t(ts1, dataset_dir, log_id) 
-		city_SE3_egot2 = get_city_SE3_egovehicle_at_sensor_t(ts2, dataset_dir, log_id) 
-		
-		USE_CAMERA_FRAME = True
-		if USE_CAMERA_FRAME:
-			camera_T_egovehicle = calib_dict['ring_front_center'].extrinsic
-			camera_T_egovehicle = SE3(rotation=camera_T_egovehicle[:3,:3], translation=camera_T_egovehicle[:3,3])
-			egovehicle_T_camera = camera_T_egovehicle.inverse()
-
-			city_SE3_camt1 = city_SE3_egot1.compose(egovehicle_T_camera)
-			city_SE3_camt2 = city_SE3_egot2.compose(egovehicle_T_camera)
-
-			camt1_SE3_city = city_SE3_camt1.inverse()
-			camt1_SE3_camt2 = camt1_SE3_city.compose(city_SE3_camt2)
-
-			# rotates i1's frame to i2's frame
-			# 1R2 bring points in 2's frame into 1's frame
-			# 1R2 is the relative rotation from 1's frame to 2's frame
-			i2_R_i1 = camt1_SE3_camt2.rotation
-			i2_t_i1 = camt1_SE3_camt2.translation
-
-			print('Recover t=', i2_t_i1, ' up to scale ', i2_t_i1 / np.linalg.norm(i2_t_i1))
-			pdb.set_trace()
-
-		else:
-			pdb.set_trace()
-			t1 = city_SE3_egot1.translation
-			t2 = city_SE3_egot2.translation
-			plt.scatter(t1[0], t1[1], 10, marker='o', color='m')
-			plt.scatter(t2[0], t2[1], 10, marker='o', color='c')
-
-			posx_1 = city_SE3_egot1.transform_point_cloud(np.array([[3,0,0]])).squeeze()
-			posy_1 = city_SE3_egot1.transform_point_cloud(np.array([[0,3,0]])).squeeze()
-
-			posx_2 = city_SE3_egot2.transform_point_cloud(np.array([[3,0,0]])).squeeze()
-			posy_2 = city_SE3_egot2.transform_point_cloud(np.array([[0,3,0]])).squeeze()
-
-			plt.plot([t1[0], posx_1[0]], [t1[1], posx_1[1]], 'b')
-			plt.plot([t1[0], posy_1[0]], [t1[1], posy_1[1]], 'k')
-
-			plt.plot([t2[0], posx_2[0]], [t2[1], posx_2[1]], 'b')
-			plt.plot([t2[0], posy_2[0]], [t2[1], posy_2[1]], 'k')
-
-			plt.axis('equal')
-			plt.title('Egovehicle trajectory')
-			plt.xlabel('x city coordinate')
-			plt.ylabel('y city coordinate')
-			plt.show()
-
-			egot1_SE3_city = city_SE3_egot1.inverse()
-			egot1_SE3_egot2 = egot1_SE3_city.right_multiply_with_se3(city_SE3_egot2)
-
-			# rotates i1's frame to i2's frame
-			# 1R2 bring points in 2's frame into 1's frame
-			# 1R2 is the relative rotation from 1's frame to 2's frame
-			i2_R_i1 = egot1_SE3_egot2.rotation
-			i2_t_i1 = egot1_SE3_egot2.translation
-
-		r = Rotation.from_matrix(i2_R_i1)
-		print('Relative rotation from ground truth: ', r.as_euler('zyx', degrees=True))
-		pdb.set_trace()
-		# use correct ground truth relationship to generate gt_E
-		# and then generate correspondences using
-		i2_E_i1 = compute_essential_matrix(i2_R_i1, i2_t_i1)
-		i2_F_i1 = get_fmat_from_emat(i2_E_i1, K1=K, K2=K)
-
-		img_h, img_w, _ = img1.shape
-
-		pts_left = np.hstack([corr_data.X1.reshape(-1,1), corr_data.Y1.reshape(-1,1) ]).astype(np.int32)
-		pts_right = np.hstack([corr_data.X2.reshape(-1,1), corr_data.Y2.reshape(-1,1)]).astype(np.int32)
-
-		pts_left = cartesian_to_homogeneous(pts_left)
-		pts_right = cartesian_to_homogeneous(pts_right)
-
-		for (pt1, pt2) in zip(pts_left, pts_right):
-			epi_error = pt2.dot(i2_F_i1).dot(pt1)
-			print('Error: ', epi_error)
-
-
-		draw_epilines(pts_left, pts_right, img1, img2, i2_F_i1)
-		plt.show()
-
-		draw_epipolar_lines(i2_F_i1, img1, img2, pts_left, pts_right)
-
-		# pts1_virt, pts2_virt = compute_virtual_points(img_h, img_w, i2_F_i1)
-
-		# corr_data = ImgKptCorrespondences(
-		# 	X1=pts1_virt[:,0],
-		# 	Y1=pts1_virt[:,1],
-		# 	X2=pts2_virt[:,0],
-		# 	Y2=pts2_virt[:,1]
-		# )
-		# corr_img = show_correspondence_lines(img1, img2, corr_data.X1, corr_data.Y1, corr_data.X2, corr_data.Y2)
-		# plt.imshow(corr_img)
-		plt.show()
+	# corr_data = ImgKptCorrespondences(
+	# 	X1=pts1_virt[:,0],
+	# 	Y1=pts1_virt[:,1],
+	# 	X2=pts2_virt[:,0],
+	# 	Y2=pts2_virt[:,1]
+	# )
+	# corr_img = show_correspondence_lines(img1, img2, corr_data.X1, corr_data.Y1, corr_data.X2, corr_data.Y2)
+	# plt.imshow(corr_img)
+	plt.show()
 
 
 def cartesian_to_homogeneous(pts):
@@ -655,8 +463,243 @@ def array_of_keypoints(keypoints: List[cv2.KeyPoint]) -> np.ndarray:
 	# plt.imshow(match_img_ransac)
 	# plt.show()
 
+
+
+def plot_argoverse_trajectory(ts1: int, ts2: int, dataset_dir: str, log_id: str):
+	""" """
+	city_SE3_egot1 = get_city_SE3_egovehicle_at_sensor_t(ts1, dataset_dir, log_id) 
+	city_SE3_egot2 = get_city_SE3_egovehicle_at_sensor_t(ts2, dataset_dir, log_id) 
+
+	# plot the vehicle movement
+	sensor_folder_wildcard = f"{dataset_dir}/{log_id}/poses/city_SE3_egovehicle*.json"
+	lidar_timestamps = get_timestamps_from_sensor_folder(sensor_folder_wildcard)
+
+	colors_arr = np.array(
+		[ [color_obj.rgb] for color_obj in Color("red").range_to(Color("green"), len(lidar_timestamps) // 49 ) ]
+	).squeeze()
+
+	plt.close('all')
+	for k,ts in enumerate(lidar_timestamps[::50]):
+		city_SE3_egov_t = get_city_SE3_egovehicle_at_sensor_t(ts, dataset_dir, log_id) 
+		t = city_SE3_egov_t.translation
+		plt.scatter(t[0], t[1], 20, marker='.', color=colors_arr[k])
+
+	t1 = city_SE3_egot1.translation
+	t2 = city_SE3_egot2.translation
+
+	print('t1 =', t1)
+	print('t2 =', t2)
+
+	plt.scatter(t1[0], t1[1], 10, marker='o', color='m')
+	plt.scatter(t2[0], t2[1], 10, marker='o', color='c')
+
+	posx_1 = city_SE3_egot1.transform_point_cloud(np.array([[3,0,0]])).squeeze()
+	posy_1 = city_SE3_egot1.transform_point_cloud(np.array([[0,3,0]])).squeeze()
+
+	posx_2 = city_SE3_egot2.transform_point_cloud(np.array([[3,0,0]])).squeeze()
+	posy_2 = city_SE3_egot2.transform_point_cloud(np.array([[0,3,0]])).squeeze()
+
+	plt.plot([t1[0], posx_1[0]], [t1[1], posx_1[1]], 'b')
+	plt.plot([t1[0], posy_1[0]], [t1[1], posy_1[1]], 'k')
+
+	plt.plot([t2[0], posx_2[0]], [t2[1], posx_2[1]], 'b')
+	plt.plot([t2[0], posy_2[0]], [t2[1], posy_2[1]], 'k')
+
+	plt.axis('equal')
+	plt.title('Egovehicle trajectory')
+	plt.xlabel('x city coordinate')
+	plt.ylabel('y city coordinate')
+	plt.show()
+
+	egot1_SE3_city = city_SE3_egot1.inverse()
+	egot1_SE3_egot2 = egot1_SE3_city.right_multiply_with_se3(city_SE3_egot2)
+
+	# rotates i1's frame to i2's frame
+	# 1R2 bring points in 2's frame into 1's frame
+	# 1R2 is the relative rotation from 1's frame to 2's frame
+	egot1_R_egot2 = egot1_SE3_egot2.rotation
+	egot1_t_egot2 = egot1_SE3_egot2.translation
+
+	r = Rotation.from_matrix(egot1_R_egot2)
+	print('egot1_R_egot2 from ground truth: ', r.as_euler('zyx', degrees=True))
+	print('egot1_t_egot2 = ', np.round(egot1_t_egot2,2))
+
+
+def plot_argoverse_epilines_from_ground_truth_poses(ts1: int, ts2: int, img1, img2, K):
+	""" """
+
+	city_SE3_egot1 = get_city_SE3_egovehicle_at_sensor_t(ts1, dataset_dir, log_id) 
+	city_SE3_egot2 = get_city_SE3_egovehicle_at_sensor_t(ts2, dataset_dir, log_id) 
+
+
+	camera_T_egovehicle = calib_dict['ring_front_center'].extrinsic
+	camera_T_egovehicle = SE3(rotation=camera_T_egovehicle[:3,:3], translation=camera_T_egovehicle[:3,3])
+	egovehicle_T_camera = camera_T_egovehicle.inverse()
+
+	city_SE3_camt1 = city_SE3_egot1.compose(egovehicle_T_camera)
+	city_SE3_camt2 = city_SE3_egot2.compose(egovehicle_T_camera)
+
+	camt1_SE3_city = city_SE3_camt1.inverse()
+	camt1_SE3_camt2 = camt1_SE3_city.compose(city_SE3_camt2)
+
+	# rotates i1's frame to i2's frame
+	# 1R2 bring points in 2's frame into 1's frame
+	# 1R2 is the relative rotation from 1's frame to 2's frame
+	i1_R_i2 = camt1_SE3_camt2.rotation
+	i1_t_i2 = camt1_SE3_camt2.translation
+
+	print('Recover t=', i1_t_i2, ' up to scale ', i1_t_i2 / np.linalg.norm(i1_t_i2))
+	pdb.set_trace()
+	r = Rotation.from_matrix(i1_R_i2)
+	print('USE_CAMERA_FRAME=', USE_CAMERA_FRAME, ' i1_R_i2 from ground truth: ', r.as_euler('zyx', degrees=True))
+	pdb.set_trace()
+
+	egot2_SE3_egot1 = egot1_SE3_egot2.inverse()
+	i2_R_i1 = egot2_SE3_egot1.rotation
+	i2_t_i1 = egot2_SE3_egot1.rotation
+
+	# use correct ground truth relationship to generate gt_E
+	# and then generate correspondences using
+	i2_E_i1 = compute_essential_matrix(i2_R_i1, i2_t_i1)
+	i2_F_i1 = get_fmat_from_emat(i2_E_i1, K1=K, K2=K)
+
+	img_h, img_w, _ = img1.shape
+
+	pts_left = np.hstack([corr_data.X1.reshape(-1,1), corr_data.Y1.reshape(-1,1) ]).astype(np.int32)
+	pts_right = np.hstack([corr_data.X2.reshape(-1,1), corr_data.Y2.reshape(-1,1)]).astype(np.int32)
+
+	pts_left = cartesian_to_homogeneous(pts_left)
+	pts_right = cartesian_to_homogeneous(pts_right)
+
+	for (pt1, pt2) in zip(pts_left, pts_right):
+		epi_error = pt2.dot(i2_F_i1).dot(pt1)
+		print('Error: ', epi_error)
+
+	draw_epilines(pts_left, pts_right, img1, img2, i2_F_i1)
+	plt.show()
+
+	draw_epipolar_lines(i2_F_i1, img1, img2, pts_left, pts_right)
+
+
+
+
+def plot_argoverse_epilines_from_annotated_correspondences(img1: np.ndarray, img2: np.ndarray, K: np.ndarray):
+	""" """
+	pkl_fpath = f'/Users/johnlambert/Downloads/visual-odometry-tutorial/labeled_correspondences/{dataset_name}_{j}_E_{i}.pkl'
+	corr_data = load_pkl_correspondences(pkl_fpath)
+
+	corr_img = show_correspondence_lines(img1, img2, corr_data.X1, corr_data.Y1, corr_data.X2, corr_data.Y2)
+	plt.imshow(corr_img)
+	plt.show()
+
+	img1_kpts = np.hstack([ corr_data.X1.reshape(-1,1), corr_data.Y1.reshape(-1,1) ]).astype(np.int32)
+	img2_kpts = np.hstack([ corr_data.X2.reshape(-1,1), corr_data.Y2.reshape(-1,1) ]).astype(np.int32)
+
+	cam2_E_cam1, inlier_mask = cv2.findEssentialMat(img1_kpts, img2_kpts, K, method=cv2.RANSAC, threshold=0.1)
+	
+	print('Num inliers: ', inlier_mask.sum())
+	cam2_F_cam1 = get_fmat_from_emat(cam2_E_cam1, K1=K, K2=K)
+	_num_inlier, cam2_R_cam1, cam2_t_cam1, _ = cv2.recoverPose(cam2_E_cam1, img1_kpts, img2_kpts, mask=inlier_mask)
+
+	r = Rotation.from_matrix(cam2_R_cam1)
+	print('cam2_R_cam1 recovered from correspondences', r.as_euler('zyx', degrees=True))
+	print('cam2_t_cam1: ', np.round(cam2_t_cam1, 2))
+
+	cam2_SE3_cam1 = SE3(cam2_R_cam1, cam2_t_cam1.squeeze() )
+	cam1_SE3_cam2 = cam2_SE3_cam1.inverse()
+	cam1_R_cam2 = cam1_SE3_cam2.rotation
+	cam1_t_cam2 = cam1_SE3_cam2.translation
+
+	r = Rotation.from_matrix(cam1_R_cam2)
+	print('cam1_R_cam2: ', r.as_euler('zyx', degrees=True)) ## prints "[-0.32  33.11 -0.45]"
+	print('cam1_t_cam2: ', np.round(cam1_t_cam2,2)) ## [0.21 0.   0.98]
+
+	draw_epilines(img1_kpts, img2_kpts, img1, img2, cam2_F_cam1)
+	plt.show()
+
+	draw_epipolar_lines(cam2_F_cam1, img1, img2, img1_kpts, img2_kpts)
+	plt.show()
+
+
+def plot_backyard_epilines():
+	""" """
+
+	# i = 1
+	# j = 2
+
+	i = 0
+	j = 1
+
+	img1_fpath = f'{img_dir}/{img_names[i]}'
+	img2_fpath = f'{img_dir}/{img_names[j]}'
+
+	img1_exif_data = get_exif(img1_fpath)
+	img2_exif_data = get_exif(img2_fpath)
+
+	img1_exif_data['Model'] = "Sony Alpha a6000" # "Alpha a6000"
+	K = get_intrinsics_from_exif(img1_exif_data, img1)
+
+	img_dir = '/Users/johnlambert/Downloads/homography_scenes'
+	planar_img_names = [
+		'plane_img1.jpg',
+		'plane_img2.jpg',
+		'plane_img3.jpg'
+	]
+	
+
+	img_names = [
+		'outdoor_img0.JPG',
+		'outdoor_img1.JPG',
+		'outdoor_img2.JPG'
+	]
+	img_dir = '/Users/johnlambert/Downloads/GTSFM/outdoor_imgs'
+	for img_name in img_names:
+		pass
+
+
+
 if __name__ == '__main__':
-	main()
+
+	log_id = '273c1883-673a-36bf-b124-88311b1a80be'
+	dataset_dir = '/Users/johnlambert/Downloads/visual-odometry-tutorial/train1'
+
+	# img_names = [
+	# 	'ring_front_center_315975640448534784.jpg',
+	# 	'ring_front_center_315975643412234000.jpg'
+	# ]
+	img_dir = '/Users/johnlambert/Downloads/visual-odometry-tutorial/train1/273c1883-673a-36bf-b124-88311b1a80be/ring_front_center'
+	dataset_name = 'argoverse'
+
+	ts1 = 315975640448534784 # nano-second timestamp
+	ts2 = 315975643412234000
+
+	img1_fpath = f'{img_dir}/ring_front_center_{ts1}.jpg'
+	img2_fpath = f'{img_dir}/ring_front_center_{ts2}.jpg'
+
+	img1 = imageio.imread(img1_fpath).astype(np.float32) / 255
+	img2 = imageio.imread(img2_fpath).astype(np.float32) / 255
+	# plt.imshow(img)
+	# plt.show()
+
+	if dataset_name == 'argoverse':
+		calib_fpath = '/Users/johnlambert/Downloads/visual-odometry-tutorial/train1/273c1883-673a-36bf-b124-88311b1a80be/vehicle_calibration_info.json'
+		calib_dict = load_calib(calib_fpath)
+		K = calib_dict['ring_front_center'].K[:3,:3]
+
+		# get the ground truth pose
+		# timestamps
+		# ts1 = Path(img1_fpath).stem.split('_')[-1]
+		# ts2 = Path(img2_fpath).stem.split('_')[-1]
+
+	pdb.set_trace()
+	plot_argoverse_trajectory(ts1, ts2, dataset_dir, log_id)
+	# plot_argoverse_epilines_from_ground_truth_poses(ts1, ts2, img1, img2, K)
+	# plot_argoverse_epilines_from_annotated_correspondences(img1, img2, K)
+
+	# plot_backyard_epilines()
+
+
+	# estimate_orb_correspondences()
 	#egomotion_unit_test()
 
 
