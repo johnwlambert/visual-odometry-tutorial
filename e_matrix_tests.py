@@ -579,7 +579,12 @@ def plot_argoverse_epilines_from_ground_truth_poses(ts1: int, ts2: int, img1, im
 		print('Error: ', epi_error)
 
 
-def plot_argoverse_epilines_from_annotated_correspondences(img1: np.ndarray, img2: np.ndarray, K: np.ndarray):
+def plot_argoverse_epilines_from_annotated_correspondences(
+	img1: np.ndarray,
+	img2: np.ndarray,
+	K: np.ndarray,
+	use_normalized_coords: bool
+	):
 	""" """
 	pkl_fpath = f'/Users/johnlambert/Downloads/visual-odometry-tutorial/labeled_correspondences/argoverse_1_E_0.pkl'
 	corr_data = load_pkl_correspondences(pkl_fpath)
@@ -591,7 +596,14 @@ def plot_argoverse_epilines_from_annotated_correspondences(img1: np.ndarray, img
 	img1_kpts = np.hstack([ corr_data.X1.reshape(-1,1), corr_data.Y1.reshape(-1,1) ]).astype(np.int32)
 	img2_kpts = np.hstack([ corr_data.X2.reshape(-1,1), corr_data.Y2.reshape(-1,1) ]).astype(np.int32)
 
-	cam2_E_cam1, inlier_mask = cv2.findEssentialMat(img1_kpts, img2_kpts, K, method=cv2.RANSAC, threshold=0.1)
+	if use_normalized_coords:
+		img1_norm_kpts = cv2.undistortPoints(img1_kpts.astype(np.float32), K, None)
+		img2_norm_kpts = cv2.undistortPoints(img2_kpts.astype(np.float32), K, None)
+		K_I = np.eye(3)
+		# since normalized coordinates are between 0 and 1, need much smaller threshold!
+		cam2_E_cam1, inlier_mask = cv2.findEssentialMat(img1_norm_kpts, img2_norm_kpts, K_I, method=cv2.RANSAC, threshold=0.01)
+	else:
+		cam2_E_cam1, inlier_mask = cv2.findEssentialMat(img1_kpts, img2_kpts, K, method=cv2.RANSAC, threshold=0.1)
 	
 	print('Num inliers: ', inlier_mask.sum())
 	cam2_F_cam1 = get_fmat_from_emat(cam2_E_cam1, K1=K, K2=K)
@@ -690,8 +702,9 @@ if __name__ == '__main__':
 
 
 	#plot_argoverse_trajectory(ts1, ts2, dataset_dir, log_id)
-	plot_argoverse_epilines_from_ground_truth_poses(ts1, ts2, img1, img2, K)
-	#plot_argoverse_epilines_from_annotated_correspondences(img1, img2, K)
+	#plot_argoverse_epilines_from_ground_truth_poses(ts1, ts2, img1, img2, K)
+	#plot_argoverse_epilines_from_annotated_correspondences(img1, img2, K, False)
+	plot_argoverse_epilines_from_annotated_correspondences(img1, img2, K, True)
 
 	# plot_backyard_epilines()
 
