@@ -601,7 +601,7 @@ def plot_argoverse_epilines_from_annotated_correspondences(
 		img2_norm_kpts = cv2.undistortPoints(img2_kpts.astype(np.float32), K, None)
 		K_I = np.eye(3)
 		# since normalized coordinates are between 0 and 1, need much smaller threshold!
-		cam2_E_cam1, inlier_mask = cv2.findEssentialMat(img1_norm_kpts, img2_norm_kpts, K_I, method=cv2.RANSAC, threshold=0.01)
+		cam2_E_cam1, inlier_mask = cv2.findEssentialMat(img1_norm_kpts, img2_norm_kpts, K_I, method=cv2.RANSAC, threshold=0.001)
 	else:
 		cam2_E_cam1, inlier_mask = cv2.findEssentialMat(img1_kpts, img2_kpts, K, method=cv2.RANSAC, threshold=0.1)
 	
